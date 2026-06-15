@@ -1,80 +1,209 @@
-# Simple PostgreSQL MCP Server
+# PostgreSQL MCP Server
 
-A simplistic [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for PostgreSQL. This server allows LLMs (like Cursor's AI) to interact with your PostgreSQL databases to list tables, describe schemas, and execute queries.
+A simple [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for PostgreSQL.
+
+It lets MCP-compatible clients such as [Cursor](https://cursor.com) connect to one or more PostgreSQL databases and:
+
+- list configured databases
+- list tables in the `public` schema
+- describe table columns
+- execute raw SQL queries
 
 ## Features
 
-- **Manage Multiple Databases**: Configure connections to multiple databases simultaneously.
-- **List Tables**: View all tables in the public schema.
-- **Describe Tables**: Get schema details (columns, types) for specific tables.
-- **Execute Queries**: Run SQL queries directly. **Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.**
+- Configure multiple PostgreSQL databases at once
+- List tables from the `public` schema
+- Inspect table schemas
+- Execute SQL queries, including `SELECT`, `INSERT`, `UPDATE`, `DELETE`, and DDL statements
 
 ## Installation
 
-1.  **Clone the repository**:
-    ```bash
-    git clone <repository-url>
-    cd pgmcp-test
-    ```
+1. Clone the repository:
 
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
+```bash
+git clone https://github.com/gpfurlaneto/postgres-mcp.git
+cd postgres-mcp
+```
 
-3.  **Build the project**:
-    ```bash
-    npm run build
-    ```
+2. Install dependencies:
 
-The compiled server will be at `dist/index.js`.
+```bash
+npm install
+```
+
+3. Build the project:
+
+```bash
+npm run build
+```
+
+The compiled server entrypoint is:
+
+```bash
+dist/index.js
+```
 
 ## Configuration
 
-You can configure databases using **Environment Variables** (recommended) or **Command Line Arguments**.
+You can configure databases in either of these ways.
 
-### 1. Environment Variables
-Set environment variables starting with `PG_DB_`. The suffix becomes the database name.
+### Environment Variables
 
--   `PG_DB_PRIMARY=postgresql://user:pass@localhost:5432/main_db`
--   `PG_DB_ANALYTICS=postgresql://user:pass@localhost:5432/analytics`
+Set one or more environment variables with the `PG_DB_` prefix:
 
-### 2. Command Line Arguments
-Pass arguments in the format `name=connection_string`.
+```bash
+PG_DB_PRIMARY=postgresql://user:pass@localhost:5432/postgres
+PG_DB_ANALYTICS=postgresql://user:pass@localhost:5432/analytics
+```
+
+The part after `PG_DB_` becomes the database name exposed to MCP tools.
+
+Examples:
+
+- `PG_DB_PRIMARY=...` -> database name is `PRIMARY`
+- `PG_DB_ANALYTICS=...` -> database name is `ANALYTICS`
+
+These names are used exactly as provided.
+
+### Command-Line Arguments
+
+You can also pass database configs as CLI arguments:
 
 ```bash
 node dist/index.js primary=postgresql://... analytics=postgresql://...
 ```
 
-## Usage with Cursor
+In this case, the MCP database names would be `primary` and `analytics`.
 
-To use this with [Cursor](https://cursor.sh):
+## Cursor Setup
 
-1.  Go to **Settings** > **Features** > **MCP**.
-2.  Click **+ Add New MCP Server**.
-3.  Fill in the details:
-    -   **Name**: `postgres`
-    -   **Type**: `command`
-    -   **Command**: `node /absolute/path/to/pgmcp-test/dist/index.js`
-4.  **Environment Variables**: Add your database connections here.
-    -   Key: `PG_DB_MYAPP`
-    -   Value: `postgresql://postgres:password@localhost:5432/myapp`
+### Option 1: `~/.cursor/mcp.json`
 
-### Tools Available
+Add an MCP server entry like this:
 
--   **`list_databases`**: Returns a list of configured database names.
--   **`list_tables`**: Lists all tables in a specific database.
-    -   *Input*: `{ "database": "MYAPP" }`
--   **`describe_table`**: Shows columns and types for a table.
-    -   *Input*: `{ "database": "MYAPP", "table": "users" }`
--   **`execute_query`**: Runs raw SQL.
-    -   *Input*: `{ "database": "MYAPP", "query": "SELECT * FROM users LIMIT 5" }`
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/postgres-mcp/dist/index.js"
+      ],
+      "env": {
+        "PG_DB_PRIMARY": "postgresql://postgres:postgres@localhost:5432/postgres"
+      }
+    }
+  }
+}
+```
 
-## ⚠️ Safety Warning
+### Option 2: Cursor UI
 
-This MCP server allows **arbitrary SQL execution**. It does not sanitize or restrict queries to read-only operations.
+You can also configure it through Cursor's MCP settings by creating a command-based MCP server that runs:
 
--   **Do not expose this server to untrusted environments.**
--   **Use a database user with limited permissions** (e.g., `READ ONLY` if you only want the AI to query data).
--   Be cautious when asking the AI to modify data.
+```bash
+node /absolute/path/to/postgres-mcp/dist/index.js
+```
 
+and adding environment variables such as:
+
+```bash
+PG_DB_PRIMARY=postgresql://postgres:postgres@localhost:5432/postgres
+```
+
+## Available Tools
+
+### `list_databases`
+
+Returns the configured database names.
+
+Example output:
+
+```json
+["PRIMARY", "ANALYTICS"]
+```
+
+### `list_tables`
+
+Lists tables in the `public` schema for a configured database.
+
+Input:
+
+```json
+{
+  "database": "PRIMARY"
+}
+```
+
+### `describe_table`
+
+Returns schema information for a table.
+
+Input:
+
+```json
+{
+  "database": "PRIMARY",
+  "table": "users"
+}
+```
+
+### `execute_query`
+
+Executes a SQL query against a configured database.
+
+Input:
+
+```json
+{
+  "database": "PRIMARY",
+  "query": "SELECT * FROM users LIMIT 5"
+}
+```
+
+## Important Note About Database Names
+
+The `database` value you send to a tool must match the configured name exactly.
+
+Examples:
+
+- env var `PG_DB_PRIMARY=...` -> use `"database": "PRIMARY"`
+- CLI arg `primary=...` -> use `"database": "primary"`
+
+## Safety Warning
+
+This server allows arbitrary SQL execution.
+
+That means it can run read and write queries, including destructive statements.
+
+Use it carefully:
+
+- do not expose it to untrusted environments
+- prefer a restricted database user when possible
+- use a read-only role if you only want querying behavior
+
+## Development
+
+Build:
+
+```bash
+npm run build
+```
+
+Run directly:
+
+```bash
+node dist/index.js
+```
+
+Run with a configured database:
+
+```bash
+PG_DB_PRIMARY=postgresql://postgres:postgres@localhost:5432/postgres node dist/index.js
+```
+
+## Notes
+
+- The old README used `cd pgmcp-test`, but the correct folder name for this repository is `postgres-mcp`.
+- If you configure databases via environment variables, the MCP-exposed database names come from the suffix after `PG_DB_`.
+- If you configure databases via CLI args, the MCP-exposed database names come from the argument name before `=`.
