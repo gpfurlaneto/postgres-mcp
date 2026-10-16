@@ -111,6 +111,26 @@ and adding environment variables such as:
 PG_DB_PRIMARY=postgresql://postgres:postgres@localhost:5432/postgres
 ```
 
+### Option 3: Claude Code Setup
+
+Claude Code can load this server globally, so it's available in every project you open. Register it once at user scope:
+
+```bash
+claude mcp add --scope user postgres \
+  -e PG_DB_PRIMARY=postgresql://user:pass@localhost:5432/postgres \
+  -- node /absolute/path/to/postgres-mcp/dist/index.js
+```
+
+- --scope user stores the server in ~/.claude.json at the top level, so it applies to all projects. The default local scope only applies to the directory where you ran the command.
+- Add one -e PG_DB_<NAME>=... flag per database. The name after PG_DB_ is the database name the tools accept.
+- Verify with claude mcp list. Inside a session, /mcp shows the server's status.
+
+To remove it later:
+
+claude mcp remove --scope user postgres
+
+▎ Note: Because the server is global, every session can run arbitrary SQL against the configured databases. Use a read-only role for the connection string unless you need writes, and avoid committing connection strings with real passwords. Keep them in your shell environment or a local secrets manager instead.
+
 ## Available Tools
 
 ### `list_databases`
